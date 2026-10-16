@@ -21,6 +21,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 use concat_core::frame::Signal;
+use concat_core::time::Rational;
 use concat_media::decode::{DecodeOptions, Decoder, FrameSource};
 use concat_media::{ColorRange, EncodeOptions, Encoder, FrameSink, Priority, RateMode, VideoCodec};
 
@@ -64,6 +65,9 @@ pub fn path_for(
 ) -> Option<PathBuf> {
     let meta = std::fs::metadata(media).ok()?;
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    // Astrologia Indiana: copies written before `write` kept each frame at
+    // its own instant are a different copy, so they are written again.
+    "timed".hash(&mut hasher);
     media.hash(&mut hasher);
     meta.len().hash(&mut hasher);
     if let Some(range) = range {
@@ -245,11 +249,39 @@ pub fn write(
         Encoder::create(&partial, width, height, rate, &encoding)
     }
     .map_err(|error| error.to_string())?;
+    // Astrologia Indiana: each frame lands at its own instant. A file whose
+    // frames come unevenly - an iPad's screen recording writes one only
+    // when the screen changes - was copied frame after frame at the
+    // average rate, so the copy drifted from the original, and playback,
+    // which reads the copy, ran ahead of or behind the paused monitor,
+    // which reads the original. The copy is written at a steady rate, and
+    // a frame is repeated until the instant the next one is due.
     let result = (|| {
+        let half = rate.frame_duration() / Rational::from_int(2);
+        let mut written: i64 = 0;
+        let mut held = None;
         while let Some(frame) = decoder.next_frame().map_err(|error| error.to_string())? {
-            encoder
-                .write_frame(&frame)
-                .map_err(|error| error.to_string())?;
+            let index = decoder
+                .position()
+                .map(|position| rate.frame_at(position + half))
+                .unwrap_or(written);
+            // The instants before this frame are the frame before it, or
+            // this one where it is the first.
+            while written < index {
+                encoder
+                    .write_frame(held.as_ref().unwrap_or(&frame))
+                    .map_err(|error| error.to_string())?;
+                written += 1;
+            }
+            // A frame due at an instant already written - frames faster
+            // than the rate - is passed over; the next gap repeats it.
+            if written == index {
+                encoder
+                    .write_frame(&frame)
+                    .map_err(|error| error.to_string())?;
+                written += 1;
+            }
+            held = Some(frame);
         }
         encoder.finish().map_err(|error| error.to_string())
     })();
