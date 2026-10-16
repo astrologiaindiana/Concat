@@ -33,8 +33,10 @@ use std::sync::atomic::AtomicBool;
 use crate::dirs::AppDirs;
 use crate::models;
 
-/// The repository the releases are read from.
-pub const REPO: &str = "jub0t/Concat";
+/// The repository the releases are read from. The Astrologia Indiana build
+/// reads its own fork, so an update never swaps it for the upstream build
+/// and its changes with it.
+pub const REPO: &str = "astrologiaindiana/Concat";
 
 /// The first release with a Version page: the earliest one a person can
 /// come back from, so the earliest one offered.
@@ -42,7 +44,8 @@ pub const FIRST_SWITCHABLE: Version = Version::new(0, 2, 5);
 
 /// GitHub's list of the repository's releases, newest first. A hundred
 /// covers years of releases at this pace.
-const RELEASES_URL: &str = "https://api.github.com/repos/jub0t/Concat/releases?per_page=100";
+const RELEASES_URL: &str =
+    "https://api.github.com/repos/astrologiaindiana/Concat/releases?per_page=100";
 
 /// What a download that was stopped says.
 pub const CANCELLED: &str = "the download was cancelled";
@@ -850,7 +853,7 @@ mod tests {
         }
         assert_eq!(
             manifest_url("v0.2.6"),
-            "https://github.com/jub0t/Concat/releases/download/v0.2.6/manifest.json"
+            "https://github.com/astrologiaindiana/Concat/releases/download/v0.2.6/manifest.json"
         );
     }
 

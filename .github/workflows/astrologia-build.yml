@@ -1,0 +1,19 @@
+name: Build Astrologia Indiana
+
+# The Astrologia Indiana build of Concat: every push to the `janet` branch,
+# or a click on "Run workflow", builds the app through build-app.yml, the one
+# place the build environment is described. The Mac installer for Apple
+# silicon comes out as the artifact `Concat-macos-arm64`.
+on:
+  push:
+    branches: [janet]
+  workflow_dispatch:
+
+concurrency:
+  group: astrologia-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-app.yml
+    secrets: inherit

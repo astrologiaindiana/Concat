@@ -253,35 +253,41 @@ pub fn lay_out(node: &Dock, (x, y, w, h): (f32, f32, f32, f32), out: &mut DockLa
     }
 }
 
-/// The arrangement the editor opens with: the library, the monitor and the
-/// inspector across the top, the timeline along the bottom. The same three
-/// shares the fixed layout carried, re-expressed as a tree — 0.31 of the width
-/// to the library and 0.22 to the inspector, which is 0.319 of what is left
-/// once the library has had its share.
+/// The arrangement the editor opens with, in the Astrologia Indiana build:
+/// the one CapCut uses. The monitor takes
+/// the whole right column, top to bottom, so a vertical 9:16 picture gets the
+/// window's full height; the library and the inspector sit side by side over
+/// the timeline on the left.
 pub fn default_dock() -> Dock {
     Dock::Split {
-        columns: false,
-        ratio: 0.6,
+        columns: true,
+        ratio: CAPCUT_LEFT_SHARE,
         first: Box::new(Dock::Split {
-            columns: true,
-            ratio: 0.31,
-            first: Dock::leaf(PaneKind::Media),
-            second: Box::new(Dock::Split {
+            columns: false,
+            ratio: 0.53,
+            first: Box::new(Dock::Split {
                 columns: true,
-                ratio: 0.681,
-                first: Dock::leaf(PaneKind::Preview),
+                ratio: 0.6,
+                first: Dock::leaf(PaneKind::Media),
                 second: Dock::leaf(PaneKind::Inspector),
             }),
+            // The timeline, and the VU meters in a slim column beside it.
+            // The row is only the left column now, so the meters' share of
+            // it grows to keep the same width they had across the window.
+            second: Box::new(Dock::Split {
+                columns: true,
+                ratio: 1.0 - METERS_SHARE / CAPCUT_LEFT_SHARE,
+                first: Dock::leaf(PaneKind::Timeline),
+                second: Dock::leaf(PaneKind::Meters),
+            }),
         }),
-        // The timeline, and the VU meters in a slim column beside it.
-        second: Box::new(Dock::Split {
-            columns: true,
-            ratio: 1.0 - METERS_SHARE,
-            first: Dock::leaf(PaneKind::Timeline),
-            second: Dock::leaf(PaneKind::Meters),
-        }),
+        second: Dock::leaf(PaneKind::Preview),
     }
 }
+
+/// The left column's share of the window in the CapCut arrangement; the
+/// monitor has the rest.
+const CAPCUT_LEFT_SHARE: f32 = 0.71;
 
 /// The top edge of a row, measured down the stack from the first lane.
 /// The dock a narrow window shows: the monitor over the timeline, and
