@@ -210,6 +210,7 @@ fn serve(
         grpc,
         token,
         roots,
+        window: None,
     };
     let server = concat_server::Server::start(config, concat_api::Api::new)?;
     if let Some(address) = server.json_addr() {

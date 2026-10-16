@@ -582,11 +582,14 @@ impl SettingsPane {
                 let config = concat_server::Config {
                     json: Some(address),
                     token: Some(prefs.token.clone()).filter(|token| !token.is_empty()),
+                    // Astrologia Indiana: a caller edits the project on
+                    // screen live, through the window (studio/live.rs).
+                    window: Some(crate::studio::live::route(open_projects.clone())),
                     ..concat_server::Config::default()
                 };
                 // The window's export slot and its register of open
                 // projects, so one export at a time holds across the two
-                // and a caller never edits the project on screen.
+                // and the project on screen is the window's to edit.
                 concat_server::Server::start(config, move |events| {
                     let mut api = concat_api::Api::new(events)?;
                     api.share_exporter(exporter);

@@ -147,6 +147,9 @@ pub struct Api {
     dirs: AppDirs,
     /// Open projects by canonical folder path.
     sessions: BTreeMap<String, Session>,
+    /// Astrologia Indiana: the project the window has on screen, as it was
+    /// last saved, for the calls that only read it (a frame, an export).
+    snapshots: BTreeMap<String, Session>,
     /// Where this API may write: a created project, an instantiated
     /// template, an export or a preview file lands under one of these.
     /// Empty means anywhere, for the process's own owner at a terminal.
@@ -180,6 +183,7 @@ impl Api {
             monitor: Monitor::new(),
             exporter: Exporter::new(),
             sessions: BTreeMap::new(),
+            snapshots: BTreeMap::new(),
             roots: Vec::new(),
             open: OpenProjects::default(),
             events,
@@ -518,6 +522,7 @@ impl Api {
     /// painted here and rejoining the clip list as stills.
     pub fn export(&mut self, path: &str, spec: &ExportSpec) -> Result<Started, ApiError> {
         self.writable(&spec.output)?;
+        self.ensure_readable(path)?;
         let session = self.session(path)?;
         if session.project().active().clips.is_empty() {
             return Err(ApiError::new(
@@ -681,6 +686,7 @@ impl Api {
         time: f64,
         size: Option<(u32, u32)>,
     ) -> Result<(u32, u32, Vec<u8>), ApiError> {
+        self.ensure_readable(path)?;
         let session = self.session(path)?;
         let settings = session.settings();
         let (width, height) = size.unwrap_or((settings.width, settings.height));
@@ -706,9 +712,29 @@ impl Api {
     }
 
     fn session(&self, path: &str) -> Result<&Session, ApiError> {
+        let key = key_of(path);
         self.sessions
-            .get(&key_of(path))
+            .get(&key)
+            .or_else(|| self.snapshots.get(&key))
             .ok_or_else(|| not_open(path))
+    }
+
+    /// Astrologia Indiana: makes a project the window has on screen
+    /// readable here, from what the window last saved; the window saves
+    /// before it hands a frame or an export on. A project this API has
+    /// open is readable already, and one nobody has is not open.
+    fn ensure_readable(&mut self, path: &str) -> Result<(), ApiError> {
+        let key = key_of(path);
+        if self.sessions.contains_key(&key) {
+            return Ok(());
+        }
+        if self.open.holder(path) != Some(Holder::Window) {
+            return Err(not_open(path));
+        }
+        let info = projects::open(path).map_err(ApiError::failed)?;
+        let session = Session::open_info(&info).map_err(ApiError::failed)?;
+        self.snapshots.insert(key, session);
+        Ok(())
     }
 
     fn session_mut(&mut self, path: &str) -> Result<&mut Session, ApiError> {

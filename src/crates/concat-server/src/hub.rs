@@ -25,6 +25,19 @@ use concat_api::{Api, ApiError, ErrorCode, Event, EventSink, Request, Response};
 /// gone, after which it is dropped.
 pub type Subscriber = Arc<dyn Fn(&Event) -> bool + Send + Sync>;
 
+/// Astrologia Indiana: a way for the window that embeds the server to take
+/// a call before the API's queue does. It answers `Ok` with the response
+/// when the call is about the project on screen, which the window then
+/// edits live, and hands the call back with `Err` when it is not its own.
+#[derive(Clone)]
+pub struct WindowRoute(pub Arc<dyn Fn(Request) -> Result<Response, Request> + Send + Sync>);
+
+impl std::fmt::Debug for WindowRoute {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("WindowRoute")
+    }
+}
+
 /// One call waiting its turn.
 struct Task {
     request: Request,
@@ -36,12 +49,14 @@ struct Task {
 pub struct Hub {
     tasks: Arc<Mutex<Option<Sender<Task>>>>,
     subscribers: Arc<Mutex<Vec<Subscriber>>>,
+    window: Option<WindowRoute>,
 }
 
 impl Hub {
     /// Starts the API's thread. `make` runs on it, given the sink; if it
     /// fails, so does this.
     pub(crate) fn start(
+        window: Option<WindowRoute>,
         make: impl FnOnce(EventSink) -> Result<Api, String> + Send + 'static,
     ) -> Result<(Hub, JoinHandle<()>), String> {
         let (tasks, queue) = mpsc::channel::<Task>();
@@ -114,6 +129,7 @@ impl Hub {
             Hub {
                 tasks: Arc::new(Mutex::new(Some(tasks))),
                 subscribers,
+                window,
             },
             thread,
         ))
@@ -121,6 +137,14 @@ impl Hub {
 
     /// Runs one request on the API's thread and waits for its response.
     pub fn call(&self, request: Request) -> Response {
+        // The project on screen is the window's to edit; it answers for it.
+        let request = match &self.window {
+            Some(route) => match (route.0)(request) {
+                Ok(response) => return response,
+                Err(request) => request,
+            },
+            None => request,
+        };
         let gone = || {
             Response::Error(ApiError::new(
                 ErrorCode::Failed,

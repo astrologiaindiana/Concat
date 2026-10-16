@@ -51,7 +51,7 @@ use std::thread::JoinHandle;
 
 use concat_api::{Api, EventSink};
 
-pub use hub::{Hub, Subscriber};
+pub use hub::{Hub, Subscriber, WindowRoute};
 
 /// Where to listen, and who may connect.
 #[derive(Clone, Debug, Default)]
@@ -73,6 +73,10 @@ pub struct Config {
     /// instantiated template, an export, a preview file. Empty means the
     /// user's home ([`home_root`]); to write anywhere, name `/`.
     pub roots: Vec<PathBuf>,
+    /// Astrologia Indiana: the window's claim on the calls about the
+    /// project it has on screen (see [`WindowRoute`]). `None` everywhere
+    /// but the window.
+    pub window: Option<WindowRoute>,
 }
 
 /// Where the API writes when told nothing else: the user's home folder,
@@ -148,7 +152,7 @@ impl Server {
             config.roots.clone()
         };
         let confined = roots.clone();
-        let (hub, dispatcher) = Hub::start(move |events| {
+        let (hub, dispatcher) = Hub::start(config.window.clone(), move |events| {
             let mut api = make(events)?;
             for transport in transports {
                 api.add_capability(transport);

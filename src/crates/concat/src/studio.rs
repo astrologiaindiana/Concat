@@ -45,6 +45,8 @@ use concat_project::model::{
 };
 
 mod consolidate;
+// Astrologia Indiana: the API edits the project on screen, live.
+pub(crate) mod live;
 use consolidate::MergeJob;
 use slint::{Model, ModelRc, SharedString, VecModel};
 
