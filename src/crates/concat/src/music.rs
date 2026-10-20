@@ -54,10 +54,10 @@ pub fn bind(app: &App) {
                 stop();
                 match found {
                     Ok(tracks) => {
-                        status(&weak, if tracks.is_empty() {
-                            "Nada encontrado. A busca é em inglês: tente outra palavra ou um clima ao lado."
-                        } else {
-                            ""
+                        status(&weak, &match tracks.len() {
+                            0 => "Nada encontrado. A busca é em inglês: tente outra palavra ou um clima ao lado.".to_string(),
+                            1 => "1 música".to_string(),
+                            n => format!("{n} músicas"),
                         });
                         TRACKS.with(|t| *t.borrow_mut() = tracks);
                     }
@@ -229,8 +229,41 @@ fn search(query: &str) -> Result<Vec<Track>, String> {
     } else {
         format!("https://mixkit.co/free-stock-music/discover/{slug}/")
     };
-    let html = String::from_utf8_lossy(&curl(&[url.as_str()])?).into_owned();
-    Ok(html.split("<div class=\"item-grid__item\">").skip(1).filter_map(card).collect())
+    let first = page(&url, 1)?;
+    // Every page of the listing, not only the first 36: the rest fetched
+    // side by side, so a mood of 250 tracks still answers in a second or two.
+    let pages = first
+        .split("aria-label=\"Go to page ")
+        .skip(1)
+        .filter_map(|p| p.split('"').next()?.parse::<usize>().ok())
+        .max()
+        .unwrap_or(1)
+        .min(MAX_PAGES);
+    let rest: Vec<_> = (2..=pages)
+        .map(|n| {
+            let url = url.clone();
+            std::thread::spawn(move || page(&url, n))
+        })
+        .collect();
+    let mut tracks = cards(&first);
+    for handle in rest {
+        if let Ok(Ok(html)) = handle.join() {
+            tracks.extend(cards(&html));
+        }
+    }
+    Ok(tracks)
+}
+
+/// 360 tracks. The page draws every row it is given (no virtual list), and a
+/// word with more than this is too broad to browse anyway.
+const MAX_PAGES: usize = 10;
+
+fn page(url: &str, n: usize) -> Result<String, String> {
+    Ok(String::from_utf8_lossy(&curl(&[format!("{url}?page={n}").as_str()])?).into_owned())
+}
+
+fn cards(html: &str) -> Vec<Track> {
+    html.split("<div class=\"item-grid__item\">").skip(1).filter_map(card).collect()
 }
 
 fn between<'a>(s: &'a str, from: &str, to: &str) -> Option<&'a str> {
@@ -290,7 +323,7 @@ mod tests {
       <div class="item-grid-music-preview__meta-time" data-test-id="duration">
         2:48
       </div>"#;
-        let tracks: Vec<Track> = html.split("<div class=\"item-grid__item\">").skip(1).filter_map(card).collect();
+        let tracks = cards(html);
         assert_eq!(tracks.len(), 1);
         assert_eq!(tracks[0].id, "21");
         assert_eq!(tracks[0].title, "Indian Meditations");
