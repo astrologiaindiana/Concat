@@ -146,6 +146,11 @@ export component Seat inherits Rectangle {
             audition-filter(id) => { Editor.library-audition-filter(id); }
             apply-audio(id) => { Editor.library-apply-audio(id); }
             save-template => { Editor.library-save-template(); }
+            music-tracks: Editor.music-tracks;
+            music-status: Editor.music-status;
+            music-search(query) => { Editor.music-search(query); }
+            music-play(row) => { Editor.music-play(row); }
+            music-add(row) => { Editor.music-add(row); }
             import-lut => { Editor.library-import-lut(); }
             reload-packages => { Editor.library-reload-packages(); }
         }

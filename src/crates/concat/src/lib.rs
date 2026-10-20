@@ -40,6 +40,7 @@ mod grading;
 mod host;
 mod i18n;
 mod meters;
+mod music;
 mod platform;
 /// What a phone's own crate installs before the window runs: the way to
 /// the system's file picker, and where a finished export is put so the
@@ -500,6 +501,9 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
     #[cfg(target_os = "macos")]
     platform::pinch_as_ctrl_wheel(app.window());
 
+    // The library's Music page: search and preview; its + is wired below.
+    music::bind(&app);
+
     // Mutate, then republish. Every handler is one of these three: the whole
     // window, the lanes alone (for the handlers a pointer drives directly,
     // which arrive as a stream), or the dock alone (a gutter drag).
@@ -769,6 +773,9 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
             );
         });
     });
+    editor.on_music_add(on_window!(|state, row: i32| {
+        music::add(&mut state, row as usize);
+    }));
     editor.on_media_activate(on_window!(|state, id: i32| {
         state.place_at_playhead(&format!("media:{id}"));
     }));

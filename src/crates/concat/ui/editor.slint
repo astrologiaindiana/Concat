@@ -8,7 +8,7 @@ import {
 import {
     CurveData, CurveGroupData, WheelData, WheelGroupData,
 } from "inspector/grading.slint";
-import { MediaFilter, MediaItemData, TextPresetData } from "workspace/media-pane.slint";
+import { MediaFilter, MediaItemData, MusicTrackData, TextPresetData } from "workspace/media-pane.slint";
 import { DockDivider, DockSide, SeatBox } from "dock.slint";
 import { PaneKind } from "workspace/pane-switcher.slint";
 import { MenuItemData } from "primitives/context-menu.slint";
@@ -127,6 +127,12 @@ export global Editor {
     in-out property <string> library-audition;
     callback library-apply-audio(effect-id: string);
     callback library-save-template();
+    /// The Music page; see music.rs.
+    in-out property <[MusicTrackData]> music-tracks;
+    in-out property <string> music-status;
+    callback music-search(query: string);
+    callback music-play(row: int);
+    callback music-add(row: int);
     /// Filters page: import `.cube` tables as looks of the user's own.
     callback library-import-lut();
     /// Effects and Filters pages: read the user's effects folder again, so

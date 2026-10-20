@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Jareer and Concat contributors
 
 import { I18n } from "../i18n.slint";
-import { Theme, Fmt, Glyph, Icon, Payload, Tip } from "../primitives/primitives.slint";
+import { Theme, Fmt, Glyph, Icon, IconButton, Payload, Tip } from "../primitives/primitives.slint";
 import { Pane, PaneScroll } from "pane.slint";
 import { HairlineSplitter } from "splitter.slint";
 import { PaneKind, PaneSwitcher } from "pane-switcher.slint";
@@ -19,6 +19,14 @@ import { ContextMenu, MenuItemData } from "../primitives/context-menu.slint";
 // saves the project as one.
 
 export enum MediaKind { video, audio, image }
+
+/// One result on the Music page (Astrologia Indiana): a Mixkit track, read
+/// by Rust's music.rs. `meta` is author, length and the first tags.
+export struct MusicTrackData {
+    title: string,
+    meta: string,
+    playing: bool,
+}
 
 /// What the sidebar has narrowed the bin to. `all` is not "no filter": it is
 /// the row that is highlighted when every import is on, which is why it is a
@@ -1743,6 +1751,14 @@ export component MediaPane inherits Rectangle {
     callback apply-audio(effect-id: string);
     /// Templates page: open the save-as-template flow for this project.
     callback save-template();
+    /// Music page: what the search found, and a line on how it went.
+    in property <[MusicTrackData]> music-tracks;
+    in property <string> music-status;
+    callback music-search(query: string);
+    /// Hear the row's track, or stop it.
+    callback music-play(row: int);
+    /// Download the row's track into the project and its bin.
+    callback music-add(row: int);
     /// Filters page: bring in `.cube` tables as looks of the user's own.
     callback import-lut();
     /// Effects and Filters pages: read the user's effects folder again.
@@ -1773,6 +1789,7 @@ export component MediaPane inherits Rectangle {
     property <bool> effects-open: true;
     property <bool> filters-open: true;
     property <bool> templates-open: true;
+    property <string> music-query;
     /// The Effects page shows the sound's shelves rather than the
     /// picture's: whichever heading's row was picked last.
     property <bool> audio-shelf;
@@ -1916,6 +1933,17 @@ export component MediaPane inherits Rectangle {
                             label: I18n.t("mediaPane.templates");
                             current: root.tab == 6;
                             clicked => { root.tab = 6; }
+                        }
+                        LibraryTab {
+                            glyph: Glyph.music;
+                            label: "Músicas";
+                            current: root.tab == 7;
+                            clicked => {
+                                root.tab = 7;
+                                if (root.music-tracks.length == 0) {
+                                    root.music-search(root.music-query);
+                                }
+                            }
                         }
                         }
                     }
@@ -2186,6 +2214,42 @@ export component MediaPane inherits Rectangle {
                                     root.audio-shelf = true;
                                     Library.group-changed(2, index);
                                 }
+                            }
+                        }
+                    }
+
+                    // Music: Mixkit's moods under Portuguese names; a click searches.
+                    if root.tab == 7: VerticalLayout {
+                        spacing: 1px;
+                        CategoryHeading {
+                            height: 26px;
+                            title: "Climas";
+                            open: true;
+                        }
+                        for mood in [
+                            { label: "Tenso", query: "tension" },
+                            { label: "Suspense", query: "suspenseful" },
+                            { label: "Dramático", query: "dramatic" },
+                            { label: "Épico", query: "epic" },
+                            { label: "Emotivo", query: "emotional" },
+                            { label: "Triste", query: "sad" },
+                            { label: "Romântico", query: "romantic" },
+                            { label: "Indiano", query: "indian" },
+                            { label: "Místico", query: "mystical" },
+                            { label: "Misterioso", query: "mysterious" },
+                            { label: "Animado", query: "upbeat" },
+                            { label: "Feliz", query: "happy" },
+                            { label: "Calmo", query: "calm" },
+                            { label: "Piano", query: "piano" },
+                            { label: "Batuque", query: "drums" },
+                            { label: "Cinema", query: "cinematic" }
+                        ]: CategoryRow {
+                            height: 24px;
+                            label: mood.label;
+                            current: root.music-query == mood.query;
+                            clicked => {
+                                root.music-query = mood.query;
+                                root.music-search(mood.query);
                             }
                         }
                     }
@@ -2481,6 +2545,73 @@ export component MediaPane inherits Rectangle {
                         auditioning: root.audition;
                         auditioned(id) => { root.audition-filter(id); }
                         applied(id, label) => { root.apply-filter(id, label); }
+                    }
+                }
+
+                // Music: search Mixkit, hear a track in place, + brings it
+                // into the project's bin (and musica/ on disk).
+                if root.tab == 7: VerticalLayout {
+                    padding: 8px;
+                    spacing: 4px;
+
+                    // A search per pause in the typing, not per key.
+                    debounce := Timer {
+                        interval: 700ms;
+                        running: false;
+                        triggered => {
+                            self.running = false;
+                            root.music-search(root.music-query);
+                        }
+                    }
+                    SearchField {
+                        text <=> root.music-query;
+                        placeholder: "Buscar música (em inglês: tension, piano, indian…)";
+                        edited(text) => {
+                            debounce.running = false;
+                            debounce.running = true;
+                        }
+                    }
+                    if root.music-status != "": Text {
+                        text: root.music-status;
+                        color: Theme.fg-muted;
+                        font-size: Theme.fs-sm;
+                        wrap: word-wrap;
+                    }
+                    for song[row] in root.music-tracks: HorizontalLayout {
+                        height: 44px;
+                        spacing: 8px;
+                        VerticalLayout {
+                            alignment: center;
+                            IconButton {
+                                glyph: song.playing ? Glyph.stop : Glyph.play;
+                                label: song.playing ? "Parar" : "Ouvir";
+                                accent: song.playing;
+                                clicked => { root.music-play(row); }
+                            }
+                        }
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            alignment: center;
+                            Text {
+                                text: song.title;
+                                color: Theme.fg;
+                                overflow: elide;
+                            }
+                            Text {
+                                text: song.meta;
+                                color: Theme.fg-muted;
+                                font-size: Theme.fs-sm;
+                                overflow: elide;
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            IconButton {
+                                glyph: Glyph.plus;
+                                label: "Pôr no projeto";
+                                clicked => { root.music-add(row); }
+                            }
+                        }
                     }
                 }
 
