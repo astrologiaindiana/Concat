@@ -499,6 +499,39 @@ pub fn delete_key(shift: bool) -> String {
     }
 }
 
+/// The trackpad's pinch, as the Ctrl+wheel zoom both the lanes and the
+/// preview already take. Slint's winit backend drops macOS's pinch event, so
+/// it is caught here and replayed as a scroll under the pointer with Control
+/// held: whichever pane is under the pointer zooms about it.
+/// shortcut: opens/closes map to a fixed 400 px of wheel per unit, tune by feel.
+#[cfg(target_os = "macos")]
+pub fn pinch_as_ctrl_wheel(window: &slint::Window) {
+    use slint::platform::{Key, WindowEvent};
+    use slint::winit_030::{winit, EventResult, WinitWindowAccessor};
+    let mut cursor = slint::LogicalPosition::new(0.0, 0.0);
+    window.on_winit_window_event(move |window, event| {
+        match event {
+            winit::event::WindowEvent::CursorMoved { position, .. } => {
+                let scale = window.scale_factor();
+                cursor = slint::LogicalPosition::new(position.x as f32 / scale, position.y as f32 / scale);
+            }
+            winit::event::WindowEvent::PinchGesture { delta, .. } => {
+                let key: slint::SharedString = Key::Control.into();
+                window.dispatch_event(WindowEvent::KeyPressed { text: key.clone() });
+                window.dispatch_event(WindowEvent::PointerScrolled {
+                    position: cursor,
+                    delta_x: 0.0,
+                    delta_y: *delta as f32 * 400.0,
+                });
+                window.dispatch_event(WindowEvent::KeyReleased { text: key });
+                return EventResult::PreventDefault;
+            }
+            _ => {}
+        }
+        EventResult::Propagate
+    });
+}
+
 /// Minimises the window: the strip's first button.
 pub fn minimize(window: &slint::Window) {
     #[cfg(not(target_os = "android"))]

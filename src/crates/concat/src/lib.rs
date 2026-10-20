@@ -497,6 +497,8 @@ fn start(project: Option<std::path::PathBuf>, smoke: bool) -> Result<(), slint::
         }
     });
     app.set_own_window_buttons(platform::OWN_WINDOW_BUTTONS);
+    #[cfg(target_os = "macos")]
+    platform::pinch_as_ctrl_wheel(app.window());
 
     // Mutate, then republish. Every handler is one of these three: the whole
     // window, the lanes alone (for the handlers a pointer drives directly,
